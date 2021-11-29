@@ -1,0 +1,21 @@
+package:
+    name: metastock2pd
+    version: 1.0.0
+
+source:
+    path: ../src
+	
+build:
+    include_recipe: False
+    number: 0
+    noarch: python
+
+requirements:
+    build:
+        - pandas        >=1.1.0
+    run:
+        - pandas        >=1.1.0
+
+about:
+    home: https://github.com/gityoav/metastock2pd
+    license: GNU
