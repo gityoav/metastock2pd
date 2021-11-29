@@ -180,7 +180,7 @@ def metastock_read(filename, fields = 7):
             rows.append(row)
     res = pd.DataFrame(rows, columns = columns)
     if fields == 8:
-        res['datetime'] = res['date'] + res['time']
+        res['datetime'] = [datetime.datetime.combine(date, time) for date, time in zip(res['date'], res['time'])]
         res = res.set_index('datetime')
     elif fields == 7:
         res = res.set_index('date') 
