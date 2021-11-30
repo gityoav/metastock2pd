@@ -1,6 +1,6 @@
 # metastock2pd
 
-A simple utility to convert metastockdata to pandas dataframe.
+A simple utility to convert metastock data to pandas dataframe.
 
 You can conda install it from https://anaconda.org/yoavgit/metastock2pd
 
