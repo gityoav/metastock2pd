@@ -5,6 +5,8 @@ import datetime
 
 ### This is a simpler version of https://github.com/themech/ms2txt and he should get all the credit for the heavy lifting in parsing the bytes
 
+__all__ = ['metastock_read', 'metastock_master', 'metastock_emaster', 'metastock_xmaster', 'metastock_read_master']
+
 def fmsbin2ieee(data):
     """
     Convert an array of 4 bytes containing Microsoft Binary floating point
@@ -156,6 +158,9 @@ def metastock_read(filename, fields = 7):
     res : pd.DataFrame
         timeseries read
     """
+    if pd.isna(fields):
+        fields = 7
+    fields = int(fields)
     if fields == 7:
         columns = ['date', 'open', 'high', 'low', 'close', 'volume', 'oi']
     elif fields == 8:
@@ -187,7 +192,7 @@ def metastock_read(filename, fields = 7):
     return res
 
 
-def metastock_read_master(path):
+def metastock_master(path):
     """
     returns a dataframe with a record per each file
 
@@ -204,7 +209,7 @@ def metastock_read_master(path):
     :Example:
     ---------
     >>> path = 'D:/TradingData/Futures/Contracts/2-Year Note C'
-    >>> res = metastock_read_master(path).iloc[:3]; res
+    >>> res = metastock_master(path).iloc[:3]; res
     
     >>>                                             filename  length first_date  last_date freq      symbol  fields
     >>> 0  D:/TradingData/Futures/Contracts/2-Year Note C...      28 1990-06-22 1990-09-19    D  TU2__1990U       7
@@ -228,8 +233,8 @@ def metastock_read_master(path):
             record_length = struct.unpack("B", file_handle.read(1))[0]
             fields = struct.unpack("B", file_handle.read(1))[0]
             file_handle.seek(2, os.SEEK_CUR)
-            _ = file_handle.read(16)
-            # stock_name = paddedString(name, self.encoding)
+            name = file_handle.read(16)
+            name = paddedString(name, 'ascii')
     
             file_handle.seek(2, os.SEEK_CUR)
             first_date = float2date(fmsbin2ieee(file_handle.read(4)))
@@ -237,10 +242,190 @@ def metastock_read_master(path):
     
             freq = struct.unpack("c", file_handle.read(1))[0].decode('ascii')
             file_handle.seek(2, os.SEEK_CUR)
-            name = file_handle.read(14)
-            symbol = paddedString(name, 'ascii')
-            rows.append(dict(filename = fname, length = record_length, first_date = first_date, last_date = last_date, freq = freq, symbol = symbol, fields = fields))
-    res = pd.DataFrame(rows)
+            symbol = file_handle.read(14)
+            symbol = paddedString(symbol, 'ascii')
+            rows.append(dict(filename = fname, 
+                             file_number = file_number, 
+                             length = record_length, 
+                             first_date = first_date, 
+                             last_date = last_date, 
+                             freq = freq, 
+                             symbol = symbol, 
+                             name = name, 
+                             fields = fields))
+    res = pd.DataFrame(rows).set_index('file_number')
     return res
 
+def metastock_emaster(path):
+    """
+    returns a dataframe with a record per each file
+
+    Parameters
+    ----------
+    path : str
+        directory where master file is found.
+
+    Returns
+    -------
+    res : pd.DataFrame
+        metadata per each .DAT file to be read.
+
+    :Example:
+    ---------
+    >>> path = 'D:/TradingData/Futures/Contracts/Heating Oil C'
+    >>> res = metastock_emaster(path); res
+    >>> res = metastock_master(path); res
+    os.listdir(path)
+    >>>                                             filename  length first_date  last_date freq      symbol  fields
+    >>> 0  D:/TradingData/Futures/Contracts/2-Year Note C...      28 1990-06-22 1990-09-19    D  TU2__1990U       7
+    >>> 1  D:/TradingData/Futures/Contracts/2-Year Note C...      28 1990-06-22 1990-12-19    D  TU2__1990Z       7
+    >>> 2  D:/TradingData/Futures/Contracts/2-Year Note C...      28 1990-09-18 1991-03-19    D  TU2__1991H       7
+    
+    once you have that, you can use metastock_read to read a file
+    
+    >>> res = dictable(res)    
+    >>> res = res(ts = metastock_read)
+    """
+    filename = os.path.join(path, 'emaster')
+    with open(filename, 'rb') as file_handle:
+        records = struct.unpack("H", file_handle.read(2))[0]
+        rows = []
+        i = 0
+        for i in range(records):
+            file_handle.seek( (i+1)*192)
+            file_handle.seek(2, os.SEEK_CUR)
+            file_number = struct.unpack("B", file_handle.read(1))[0]
+            fname = os.path.join(path, 'F%d.DAT' % file_number)
+            file_handle.seek(3, os.SEEK_CUR)
+            fields = struct.unpack("B", file_handle.read(1))[0]
+            file_handle.seek(4, os.SEEK_CUR)
+            symbol = file_handle.read(14)
+            symbol = paddedString(symbol, 'ascii')
+            file_handle.seek(7, os.SEEK_CUR)
+            name = file_handle.read(16)
+            name = paddedString(name, 'ascii')
+            
+            file_handle.seek(12, os.SEEK_CUR)
+            freq = struct.unpack("c", file_handle.read(1))[0].decode('ascii')
+            file_handle.seek(3, os.SEEK_CUR)
+            first_date = float2date(fmsbin2ieee(file_handle.read(4)))
+            file_handle.seek(4, os.SEEK_CUR)
+            last_date = float2date(fmsbin2ieee(file_handle.read(4)))
+            rows.append(dict(filename = fname, 
+                             file_number = file_number, 
+                             first_date = first_date, 
+                             last_date = last_date, 
+                             freq = freq, 
+                             symbol = symbol, 
+                             name = name, 
+                             fields = fields))
+    res = pd.DataFrame(rows).set_index('file_number')
+    return res
+
+def metastock_xmaster(path):
+    """
+    returns a dataframe with a record per each file
+
+    Parameters
+    ----------
+    path : str
+        directory where master file is found.
+
+    Returns
+    -------
+    res : pd.DataFrame
+        metadata per each .DAT file to be read.
+
+    :Example:
+    ---------
+    >>> path = 'D:/TradingData/Futures/Contracts/Heating Oil C'
+    >>> res = metastock_emaster(path); res
+    >>> res = metastock_master(path); res
+    >>> res = metastock_xmaster(path); res
+    os.listdir(path)
+    >>>                                             filename  length first_date  last_date freq      symbol  fields
+    >>> 0  D:/TradingData/Futures/Contracts/2-Year Note C...      28 1990-06-22 1990-09-19    D  TU2__1990U       7
+    >>> 1  D:/TradingData/Futures/Contracts/2-Year Note C...      28 1990-06-22 1990-12-19    D  TU2__1990Z       7
+    >>> 2  D:/TradingData/Futures/Contracts/2-Year Note C...      28 1990-09-18 1991-03-19    D  TU2__1991H       7
+    
+    once you have that, you can use metastock_read to read a file
+    
+    >>> from pyg import dictable
+    >>> res = dictable(res)    
+    >>> res = res(ts = metastock_read)
+    
+    """
+    filename = os.path.join(path, 'xmaster')
+    with open(filename, 'rb') as file_handle:
+        file_handle.seek(10, os.SEEK_SET)
+        records = struct.unpack("H", file_handle.read(2))[0] 
+        rows = []
+        i = 0
+        for i in range(records):
+            file_handle.seek( (i+1)*150 )
+            file_handle.seek(1, os.SEEK_CUR)
+            symbol = file_handle.read(14)
+            symbol = paddedString(symbol, 'ascii')
+
+            file_handle.seek(1, os.SEEK_CUR)
+            name = file_handle.read(45)
+            name = paddedString(name, 'ascii')
+
+            file_handle.seek(1, os.SEEK_CUR)
+            freq = struct.unpack("c", file_handle.read(1))[0].decode('ascii')
+            file_handle.seek(2, os.SEEK_CUR) # intraday timeframe?
+            file_number = struct.unpack("H", file_handle.read(2))[0]
+            fname = os.path.join(path, 'F%d.MWD' % file_number)
+            file_handle.seek(3, os.SEEK_CUR)
+            file_handle.seek(1, os.SEEK_CUR) # bitset
+            file_handle.seek(33, os.SEEK_CUR)
+            file_handle.seek(4, os.SEEK_CUR) # collection date?
+            first_date = int2date(struct.unpack("I", file_handle.read(4))[0])
+            file_handle.seek(4, os.SEEK_CUR)  # first time?
+            last_date = int2date(struct.unpack("I", file_handle.read(4))[0])
+            file_handle.seek(4, os.SEEK_CUR)  # last time?
+
+
+            rows.append(dict(filename = fname, 
+                             file_number = file_number, 
+                             first_date = first_date, 
+                             last_date = last_date, 
+                             freq = freq, 
+                             symbol = symbol,
+                             name = name))
+    res = pd.DataFrame(rows).set_index('file_number')
+    return res
+
+
+def metastock_read_master(path):
+    """
+    returns a dataframe with a record per each file
+
+    Parameters
+    ----------
+    path : str
+        directory where master file is found.
+
+    Returns
+    -------
+    res : pd.DataFrame
+        metadata per each .DAT file to be read.
+
+    :Example:
+    ---------
+    >>> path = 'D:/TradingData/Futures/Contracts/Heating Oil C'
+    >>> res = metastock_read_master(path)
+    >>> rs = dictable(res)
+    >>> rs = rs(ts = metastock_read)    
+    """
+    masters = []
+    if os.path.isfile(os.path.join(path, 'master')):
+        masters.append(metastock_master(path))
+    elif os.path.isfile(os.path.join(path, 'emaster')):
+        masters.append(metastock_emaster(path))
+    if os.path.isfile(os.path.join(path, 'xmaster')):
+        masters.append(metastock_xmaster(path))
+    res = pd.concat(masters).sort_index()
+    return res
+    
     
